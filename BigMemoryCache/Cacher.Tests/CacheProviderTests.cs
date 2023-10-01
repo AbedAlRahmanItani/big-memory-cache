@@ -1,4 +1,5 @@
 ﻿using AutoFixture;
+using Cacher.Exceptions;
 using FluentAssertions;
 using Xunit;
 
@@ -7,6 +8,7 @@ namespace Cacher.Tests;
 public class CacheProviderTests
 {
     private readonly Fixture _fixture = new();
+    private ICacheProvider? _cacheProvider;
 
     [Fact]
     public void When_AddOrUpdate_AndItemAlreadyExists_ThenShouldUpdateItemSuccessfullyInCache()
@@ -16,14 +18,14 @@ public class CacheProviderTests
         var key = _fixture.Create<string>();
         var value1 = _fixture.Create<decimal>();
         var value2 = _fixture.Create<int>();
-        var cacheProvider = new CacheProvider(maxItemsCountThreshold);
+        _cacheProvider = new CacheProvider(maxItemsCountThreshold);
 
         // Act
-        cacheProvider.AddOrUpdate(key, value1);
-        cacheProvider.AddOrUpdate(key, value2);
+        _cacheProvider.AddOrUpdate(key, value1);
+        _cacheProvider.AddOrUpdate(key, value2);
 
         // Assert
-        var expectedValue = cacheProvider.Get(key);
+        var expectedValue = _cacheProvider.Get(key);
         expectedValue.Should().Be(value2);
     }
 
@@ -34,13 +36,13 @@ public class CacheProviderTests
         const int maxItemsCountThreshold = 1;
         var key = _fixture.Create<string>();
         var value = _fixture.Create<decimal>();
-        var cacheProvider = new CacheProvider(maxItemsCountThreshold);
+        _cacheProvider = new CacheProvider(maxItemsCountThreshold);
 
         // Act
-        cacheProvider.AddOrUpdate(key, value);
+        _cacheProvider.AddOrUpdate(key, value);
 
         // Assert
-        var expectedValue = cacheProvider.Get(key);
+        var expectedValue = _cacheProvider.Get(key);
         expectedValue.Should().Be(value);
     }
 
@@ -55,22 +57,57 @@ public class CacheProviderTests
         var value2 = _fixture.Create<int>();
         string evictedKey = string.Empty;
         object? evictedValue = null;
-        var cacheProvider = new CacheProvider(maxItemsCountThreshold);
-        cacheProvider.CachedItemEvictedEvent += delegate (string key, object? value)
+        _cacheProvider = new CacheProvider(maxItemsCountThreshold);
+        _cacheProvider.CachedItemEvictedEvent += delegate (string key, object? value)
         {
             evictedKey = key;
             evictedValue = value;
         };
 
         // Act
-        cacheProvider.AddOrUpdate(key1, value1);
+        _cacheProvider.AddOrUpdate(key1, value1);
         Thread.Sleep(100);
-        cacheProvider.AddOrUpdate(key2, value2);
+        _cacheProvider.AddOrUpdate(key2, value2);
 
         // Assert
-        var expectedValue = cacheProvider.Get(key2);
+        var expectedValue = _cacheProvider.Get(key2);
         expectedValue.Should().Be(value2);
         evictedKey.Should().Be(key1);
         evictedValue.Should().Be(value1);
+    }
+
+    [Fact]
+    public void When_Remove_AndItemDoesNotExist_ThenShouldThrowItemNotFoundException()
+    {
+        // Arrange
+        const int maxItemsCountThreshold = 1;
+        var key = _fixture.Create<string>();
+        _cacheProvider = new CacheProvider(maxItemsCountThreshold);
+
+        // Act
+        var action = () =>_cacheProvider.Remove(key);
+
+        // Assert
+        action.Should()
+            .Throw<ItemNotFoundException>($"An Item with Key '{key}' was not found in the cache.");
+    }
+
+    [Fact]
+    public void When_Remove_AndItemExistsInCache_ThenShouldRemoveItemSuccessfullyFromCache()
+    {
+        // Arrange
+        const int maxItemsCountThreshold = 1;
+        var key = _fixture.Create<string>();
+        var value = _fixture.Create<decimal>();
+        _cacheProvider = new CacheProvider(maxItemsCountThreshold);
+
+        // Act
+        _cacheProvider.AddOrUpdate(key, value);
+        _cacheProvider.Remove(key);
+
+        // Assert
+        var action = () => _cacheProvider.Get(key);
+        action.Should()
+            .Throw<ItemNotFoundException>($"An Item with Key '{key}' was not found in the cache.");
     }
 }
