@@ -8,7 +8,7 @@ namespace Cacher;
 public class CacheProvider : ICacheProvider
 {
     private readonly int _maxItemsCountThreshold;
-    private ConcurrentDictionary<string, CachedItem> _cachedItemsDictionary;
+    private readonly ConcurrentDictionary<string, CachedItem> _cachedItemsDictionary;
 
     public CacheProvider(int maxItemsCountThreshold)
     {
@@ -31,14 +31,9 @@ public class CacheProvider : ICacheProvider
         return cachedItem.Value;
     }
 
-    public void Add(string key, object value)
+    public void AddOrUpdate(string key, object value)
     {
-        if (_cachedItemsDictionary.ContainsKey(key))
-        {
-            throw new ItemExistsInCacheException(key);
-        }
-
-        if (ShouldRemoveLeastRecentlyUsedItem())
+        if (ShouldRemoveLeastRecentlyUsedItem(key))
         {
             RemoveLeastRecentlyUsedItem();
         }
@@ -49,7 +44,8 @@ public class CacheProvider : ICacheProvider
             Value = value,
             LastTimeUsed = DateTime.UtcNow
         };
-        _cachedItemsDictionary.TryAdd(key, cachedItem);
+
+        _cachedItemsDictionary.AddOrUpdate(key, cachedItem, (key, oldValue) => cachedItem);
     }
 
     public void Remove(string key)
@@ -62,9 +58,10 @@ public class CacheProvider : ICacheProvider
         _cachedItemsDictionary.TryRemove(key, out _);
     }
 
-    private bool ShouldRemoveLeastRecentlyUsedItem()
+    private bool ShouldRemoveLeastRecentlyUsedItem(string key)
     {
-        return _cachedItemsDictionary.Keys.Count == _maxItemsCountThreshold;
+        return !_cachedItemsDictionary.ContainsKey(key) 
+            && _cachedItemsDictionary.Keys.Count == _maxItemsCountThreshold;
     }
 
     private void RemoveLeastRecentlyUsedItem()

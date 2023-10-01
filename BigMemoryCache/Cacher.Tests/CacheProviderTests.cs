@@ -1,5 +1,4 @@
 ﻿using AutoFixture;
-using Cacher.Exceptions;
 using FluentAssertions;
 using Xunit;
 
@@ -10,28 +9,26 @@ public class CacheProviderTests
     private readonly Fixture _fixture = new();
 
     [Fact]
-    public void When_Add_AndItemAlreadyExists_ThenShouldThrowItemExistsInCacheException()
+    public void When_AddOrUpdate_AndItemAlreadyExists_ThenShouldUpdateItemSuccessfullyInCache()
     {
         // Arrange
         const int maxItemsCountThreshold = 2;
         var key = _fixture.Create<string>();
-        var value = _fixture.Create<decimal>();
+        var value1 = _fixture.Create<decimal>();
+        var value2 = _fixture.Create<int>();
         var cacheProvider = new CacheProvider(maxItemsCountThreshold);
 
         // Act
-        var action = () =>
-        {
-            cacheProvider.Add(key, value);
-            cacheProvider.Add(key, value);
-        };
+        cacheProvider.AddOrUpdate(key, value1);
+        cacheProvider.AddOrUpdate(key, value2);
 
         // Assert
-        action.Should()
-            .Throw<ItemExistsInCacheException>($"An Item with Key '{key}' already exists in the cache.");
+        var expectedValue = cacheProvider.Get(key);
+        expectedValue.Should().Be(value2);
     }
 
     [Fact]
-    public void When_Add_AndItemDoesNotExists_AndCachedItemsCountBelowThreshold_ThenShouldAddItemSuccessfullyToCache()
+    public void When_AddOrUpdate_AndItemDoesNotExists_ThenShouldAddItemSuccessfullyToCache()
     {
         // Arrange
         const int maxItemsCountThreshold = 1;
@@ -40,7 +37,7 @@ public class CacheProviderTests
         var cacheProvider = new CacheProvider(maxItemsCountThreshold);
 
         // Act
-        cacheProvider.Add(key, value);
+        cacheProvider.AddOrUpdate(key, value);
 
         // Assert
         var expectedValue = cacheProvider.Get(key);
@@ -48,7 +45,7 @@ public class CacheProviderTests
     }
 
     [Fact]
-    public void When_Add_AndItemDoesNotExists_AndCachedItemsCountReachesThreshold_ThenShouldAddItemAndEvictLeastUsedItem()
+    public void When_AddOrUpdate_AndItemDoesNotExists_AndCachedItemsCountReachedThreshold_ThenShouldAddItemAndEvictLeastUsedItem()
     {
         // Arrange
         const int maxItemsCountThreshold = 1;
@@ -66,9 +63,9 @@ public class CacheProviderTests
         };
 
         // Act
-        cacheProvider.Add(key1, value1);
+        cacheProvider.AddOrUpdate(key1, value1);
         Thread.Sleep(100);
-        cacheProvider.Add(key2, value2);
+        cacheProvider.AddOrUpdate(key2, value2);
 
         // Assert
         var expectedValue = cacheProvider.Get(key2);
